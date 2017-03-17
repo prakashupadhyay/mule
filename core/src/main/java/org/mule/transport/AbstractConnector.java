@@ -6,6 +6,7 @@
  */
 package org.mule.transport;
 
+import static org.apache.commons.lang.StringUtils.defaultIfEmpty;
 import static org.apache.commons.lang.SystemUtils.LINE_SEPARATOR;
 
 import org.mule.AbstractAnnotatedObject;
@@ -78,7 +79,6 @@ import org.mule.util.ClassUtils;
 import org.mule.util.CollectionUtils;
 import org.mule.util.ObjectNameHelper;
 import org.mule.util.ObjectUtils;
-import org.mule.util.StringUtils;
 import org.mule.util.concurrent.NamedThreadFactory;
 import org.mule.util.concurrent.ThreadNameHelper;
 
@@ -1319,8 +1319,9 @@ public abstract class AbstractConnector extends AbstractAnnotatedObject implemen
      */
     protected Object getReceiverKey(FlowConstruct flowConstruct, InboundEndpoint endpoint)
     {
-        return StringUtils.defaultIfEmpty(endpoint.getEndpointURI().getFilterAddress(),
-                endpoint.getEndpointURI().getAddress());
+        return defaultIfEmpty(endpoint.getName(),
+                defaultIfEmpty(endpoint.getEndpointURI().getFilterAddress(),
+                        endpoint.getEndpointURI().getAddress()));
     }
 
     @Override
