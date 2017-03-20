@@ -14,6 +14,7 @@ import org.mule.api.transport.MessageTypeNotSupportedException;
 import org.mule.config.i18n.Message;
 import org.mule.config.i18n.MessageFactory;
 import org.mule.transport.AbstractMuleMessageFactory;
+import org.mule.transport.NullPayload;
 import org.mule.transport.http.components.BadRequestException;
 import org.mule.util.CaseInsensitiveHashMap;
 import org.mule.util.IOUtils;
@@ -68,6 +69,27 @@ public class HttpMuleMessageFactory extends AbstractMuleMessageFactory
     protected Class<?>[] getSupportedTransportMessageTypes()
     {
         return new Class[]{HttpRequest.class, HttpMethod.class};
+    }
+
+    @Override
+    protected MuleMessage doCreate(Object transportMessage, MuleMessage previousMessage, String encoding, MuleContext muleContext) throws Exception
+    {
+
+        if (transportMessage == null)
+        {
+            return new DefaultMuleMessage(NullPayload.getInstance(), muleContext);
+        }
+
+        validateMessage(transportMessage);
+
+        synchronized (this)
+        {
+            Object payload = extractPayload(transportMessage, encoding);
+            DefaultMuleMessage message = createMessage(payload, previousMessage, transportMessage, encoding, muleContext);
+            addProperties(message, transportMessage);
+            addAttachments(message, transportMessage);
+            return message;
+        }
     }
 
     @Override
