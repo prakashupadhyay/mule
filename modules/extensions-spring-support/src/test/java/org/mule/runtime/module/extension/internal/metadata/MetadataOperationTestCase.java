@@ -86,6 +86,9 @@ public class MetadataOperationTestCase extends MetadataExtensionFunctionalTestCa
   private static final String PAGED_OPERATION_METADATA = "pagedOperationMetadata";
   private static final String CONFIG = "config";
   private static final String ALTERNATIVE_CONFIG = "alternative-config";
+  private static final MetadataKey CAR_KEY = newKey(CAR).build();
+  private static final MetadataKey LOCATION_MULTILEVEL_KEY =
+      newKey(AMERICA).withChild(newKey(USA)).withChild(newKey(SAN_FRANCISCO)).build();
 
   @Override
   protected String getConfigFile() {
@@ -479,6 +482,7 @@ public class MetadataOperationTestCase extends MetadataExtensionFunctionalTestCa
         .filter(f -> !expectedKeys.contains(f.getKey().getName().getLocalPart()))
         .findFirst();
     assertThat(missingKey.isPresent(), is(false));
+    assertResolvedKey(metadataDescriptor, LOCATION_MULTILEVEL_KEY);
   }
 
   @Test
@@ -486,10 +490,20 @@ public class MetadataOperationTestCase extends MetadataExtensionFunctionalTestCa
     location = Location.builder().globalName(METADATA_KEY_DEFAULT_VALUE).addProcessorsPart().addIndexPart(0).build();
     final MetadataResult<ComponentMetadataDescriptor<OperationModel>> result = metadataService.getOperationMetadata(location);
     assertSuccessResult(result);
+    assertResolvedKey(result, CAR_KEY);
     ComponentMetadataDescriptor descriptor = result.get();
     MetadataType type = descriptor.getModel().getOutput().getType();
     assertThat(type, is(instanceOf(ObjectType.class)));
     assertThat(((ObjectType) type).getFields(), hasSize(2));
+  }
+
+  private void assertResolvedKey(MetadataResult<ComponentMetadataDescriptor<OperationModel>> result, MetadataKey metadataKey) {
+    assertThat(result.get().getMetadataAttributes().getKey().get().getId(), is(metadataKey.getId()));
+    assertThat(result.get().getMetadataAttributes().getKey().get().getChilds(), hasSize(metadataKey.getChilds().size()));
+    if (!metadataKey.getChilds().isEmpty()) {
+      assertThat(result.get().getMetadataAttributes().getKey().get().getChilds(), contains(metadataKey.getChilds()));
+    }
+
   }
 
 

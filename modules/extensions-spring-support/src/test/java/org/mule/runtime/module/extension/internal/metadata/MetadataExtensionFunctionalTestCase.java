@@ -124,12 +124,10 @@ public abstract class MetadataExtensionFunctionalTestCase extends ExtensionFunct
   protected MetadataService metadataService;
   protected ClassTypeLoader typeLoader = ExtensionsTypeLoaderFactory.getDefault().createTypeLoader();
   protected BaseTypeBuilder typeBuilder = BaseTypeBuilder.create(JAVA);
+  protected MetadataComponentDescriptorProvider provider;
 
   @Parameterized.Parameter
-  public ResolutionType resolutionType = EXPLICIT_RESOLUTION;
-
-  @Parameterized.Parameter(1)
-  public MetadataComponentDescriptorProvider provider = explicitMetadataResolver;
+  public ResolutionType resolutionType;
 
   @Override
   protected Class<?>[] getAnnotatedExtensionClasses() {
@@ -139,8 +137,8 @@ public abstract class MetadataExtensionFunctionalTestCase extends ExtensionFunct
   @Parameterized.Parameters(name = "{0}")
   public static Collection<Object[]> data() {
     return Arrays.asList(new Object[][] {
-        {EXPLICIT_RESOLUTION, explicitMetadataResolver},
-        {DSL_RESOLUTION, dslMetadataResolver}
+        {EXPLICIT_RESOLUTION},
+        {DSL_RESOLUTION}
     });
   }
 
@@ -149,6 +147,15 @@ public abstract class MetadataExtensionFunctionalTestCase extends ExtensionFunct
     event = eventBuilder().message(InternalMessage.of("")).build();
     metadataService = muleContext.getRegistry().lookupObject(MuleMetadataService.class);
     personType = getMetadata(PERSON_METADATA_KEY.getId());
+    setProvider();
+  }
+
+  protected void setProvider() {
+    if (resolutionType == EXPLICIT_RESOLUTION) {
+      provider = explicitMetadataResolver;
+    } else {
+      provider = dslMetadataResolver;
+    }
   }
 
   enum ResolutionType {
