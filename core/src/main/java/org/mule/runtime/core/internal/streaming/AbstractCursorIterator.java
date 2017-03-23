@@ -71,6 +71,22 @@ public abstract class AbstractCursorIterator<T> implements CursorIterator<T> {
     return fullyConsumed || released;
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean isReleased() {
+    return released;
+  }
+  
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public CursorIteratorProvider getProvider() {
+    return provider;
+  }
+
   protected void assertNotDisposed() {
     checkState(!released, "Stream is closed");
   }
@@ -79,4 +95,11 @@ public abstract class AbstractCursorIterator<T> implements CursorIterator<T> {
     this.fullyConsumed = fullyConsumed;
   }
 
+  /**
+   * @throws UnsupportedOperationException Removing from a stream is not supported
+   */
+  @Override
+  public void remove() {
+    throw new UnsupportedOperationException("Removing from a stream is not supported");
+  }
 }
