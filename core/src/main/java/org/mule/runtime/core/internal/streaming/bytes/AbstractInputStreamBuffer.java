@@ -11,6 +11,7 @@ import static java.lang.Math.toIntExact;
 import static java.nio.channels.Channels.newChannel;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
 import static org.mule.runtime.api.util.Preconditions.checkState;
+import static org.mule.runtime.core.util.ConcurrencyUtils.safeUnlock;
 import static org.slf4j.LoggerFactory.getLogger;
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.core.util.func.CheckedRunnable;
@@ -237,11 +238,7 @@ public abstract class AbstractInputStreamBuffer implements InputStreamBuffer {
    * Releases the lock obtained through {@link #acquireBufferLock()}
    */
   public void releaseBufferLock() {
-    try {
-      bufferLock.unlock();
-    } catch (IllegalMonitorStateException e) {
-      // lock was released early to improve performance and somebody else took it. This is fine
-    }
+    safeUnlock(bufferLock);
   }
 
   /**

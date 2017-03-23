@@ -37,6 +37,18 @@ public abstract class AbstractCursorIterator<T> implements CursorIterator<T> {
     this.provider = provider;
   }
 
+  protected abstract T doNext(long position);
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public final T next() {
+    T item = doNext(position);
+    position++;
+    return item;
+  }
+
   /**
    * {@inheritDoc}
    */
