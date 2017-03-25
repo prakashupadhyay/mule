@@ -216,6 +216,10 @@ class ConfigurationBasedElementModelFactory {
 
       @Override
       protected void defaultVisit(MetadataType metadataType) {
+        DslElementModel.Builder<MetadataType> elementBuilder = DslElementModel.<MetadataType>builder()
+            .withModel(model)
+            .withDsl(modelDsl);
+
         Optional<ComponentIdentifier> identifier = getIdentifier(modelDsl);
         String value = parameters.get(name);
         if (isBlank(value)) {
@@ -226,15 +230,12 @@ class ConfigurationBasedElementModelFactory {
             }
           } else if (defaultValue.isPresent()) {
             value = defaultValue.get();
+            elementBuilder.isExplicitInDsl(false);
           }
         }
 
         if (!isBlank(value)) {
-          typeBuilder.containing(DslElementModel.builder()
-              .withModel(model)
-              .withDsl(modelDsl)
-              .withValue(value)
-              .build());
+          typeBuilder.containing(elementBuilder.withValue(value).build());
         }
       }
 
@@ -276,6 +277,7 @@ class ConfigurationBasedElementModelFactory {
             .withModel(model)
             .withDsl(modelDsl)
             .withValue(defaultValue.get())
+            .isExplicitInDsl(false)
             .build()));
       }
 
@@ -314,6 +316,7 @@ class ConfigurationBasedElementModelFactory {
             .withModel(model)
             .withDsl(modelDsl)
             .withValue(defaultValue.get())
+            .isExplicitInDsl(false)
             .build()));
       }
     };
@@ -506,6 +509,7 @@ class ConfigurationBasedElementModelFactory {
                   value = paramComponent.getValue().get().trim();
                 } else if (defaultValue.isPresent()) {
                   value = defaultValue.get();
+                  paramElementBuilder.isExplicitInDsl(false);
                 }
               }
               paramElementBuilder.withValue(value);
@@ -588,11 +592,11 @@ class ConfigurationBasedElementModelFactory {
         return;
 
       case STREAMING_STRATEGY_PARAMETER_NAME:
-        ComponentIdentifier inMemoryStream = newIdentifier(NON_REPEATABLE_BYTE_STREAM_ALIAS, paramDsl.getNamespace());
+        ComponentIdentifier inMemoryStream = newIdentifier(NON_REPEATABLE_BYTE_STREAM_ALIAS, paramDsl.getPrefix());
         ComponentIdentifier repeatableMemoryStream =
-            newIdentifier(REPEATABLE_IN_MEMORY_BYTES_STREAM_ALIAS, paramDsl.getNamespace());
+            newIdentifier(REPEATABLE_IN_MEMORY_BYTES_STREAM_ALIAS, paramDsl.getPrefix());
         ComponentIdentifier repeatableFileStream =
-            newIdentifier(REPEATABLE_FILE_STORE_BYTES_STREAM_ALIAS, paramDsl.getNamespace());
+            newIdentifier(REPEATABLE_FILE_STORE_BYTES_STREAM_ALIAS, paramDsl.getPrefix());
 
         ComponentConfiguration streaming = null;
         if (nested.containsKey(inMemoryStream)) {

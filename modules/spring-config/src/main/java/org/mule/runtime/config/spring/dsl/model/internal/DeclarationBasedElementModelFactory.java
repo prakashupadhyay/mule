@@ -17,6 +17,7 @@ import static org.mule.runtime.extension.api.util.ExtensionMetadataTypeUtils.get
 import static org.mule.runtime.extension.api.util.ExtensionMetadataTypeUtils.isMap;
 import static org.mule.runtime.extension.api.util.ExtensionMetadataTypeUtils.isParameterGroup;
 import static org.mule.runtime.extension.api.util.ExtensionModelUtils.getDefaultValue;
+import static org.mule.runtime.extension.api.util.ExtensionModelUtils.isContent;
 import static org.mule.runtime.extension.api.util.ExtensionModelUtils.isInfrastructure;
 import static org.mule.runtime.extension.internal.dsl.syntax.DslSyntaxUtils.getId;
 import static org.mule.runtime.internal.dsl.DslConstants.CONFIG_ATTRIBUTE_NAME;
@@ -52,6 +53,7 @@ import org.mule.runtime.api.meta.model.ComponentModel;
 import org.mule.runtime.api.meta.model.ExtensionModel;
 import org.mule.runtime.api.meta.model.config.ConfigurationModel;
 import org.mule.runtime.api.meta.model.connection.ConnectionProviderModel;
+import org.mule.runtime.api.meta.model.display.LayoutModel;
 import org.mule.runtime.api.meta.model.operation.HasOperationModels;
 import org.mule.runtime.api.meta.model.operation.OperationModel;
 import org.mule.runtime.api.meta.model.operation.RouteModel;
@@ -248,7 +250,12 @@ class DeclarationBasedElementModelFactory {
 
     RouteElementDeclaration routeDeclaration = scopeDeclaration.getRoute();
     if (routeDeclaration != null) {
-      element.containing(crateRouteElement(model.getRouteModel(), routeDeclaration));
+      routeDeclaration.getComponents()
+          .forEach(componentDeclaration -> create(componentDeclaration)
+              .ifPresent(componentElement -> {
+                componentElement.getConfiguration().ifPresent(configuration::withNestedComponent);
+                element.containing(componentElement);
+              }));
     }
 
     return element.withConfig(configuration.build()).build();
@@ -366,7 +373,7 @@ class DeclarationBasedElementModelFactory {
                 configuredParameters.add(declared.get().getName());
               } else {
                 getDefaultValue(paramModel)
-                    .ifPresent(value -> createSimpleParameter(value, paramDsl, parentConfig, parentElement, paramModel));
+                    .ifPresent(value -> createSimpleParameter(value, paramDsl, parentConfig, parentElement, paramModel, false));
               }
             }));
 
@@ -421,7 +428,9 @@ class DeclarationBasedElementModelFactory {
 
       @Override
       public void visitSimpleValue(String value) {
-        createSimpleParameter(value, paramDsl, parentConfig, parentElement, parameterModel);
+        checkArgument(paramDsl.supportsAttributeDeclaration() || isContent(parameterModel) || isText(parameterModel),
+                      "Simple values can only be declared for parameters of simple type, or those with Content role");
+        createSimpleParameter(value, paramDsl, parentConfig, parentElement, parameterModel, true);
       }
 
       @Override
@@ -575,7 +584,7 @@ class DeclarationBasedElementModelFactory {
   }
 
   private void createSimpleParameter(String value, DslElementSyntax paramDsl, ComponentConfiguration.Builder parentConfig,
-                                     DslElementModel.Builder parentElement, ParameterModel parameterModel) {
+                                     DslElementModel.Builder parentElement, ParameterModel parameterModel, boolean explicit) {
     if (paramDsl.supportsAttributeDeclaration()) {
       // attribute parameters imply no further nesting in the configs
       parentConfig.withParameter(paramDsl.getAttributeName(), value);
@@ -583,6 +592,7 @@ class DeclarationBasedElementModelFactory {
           .withModel(parameterModel)
           .withDsl(paramDsl)
           .withValue(value)
+          .isExplicitInDsl(explicit)
           .build());
     } else {
       // we are in the content case, so we have one more nesting level
@@ -597,6 +607,7 @@ class DeclarationBasedElementModelFactory {
           .withModel(parameterModel)
           .withDsl(paramDsl)
           .withConfig(parameterConfig)
+          .isExplicitInDsl(explicit)
           .build());
     }
   }
@@ -619,17 +630,25 @@ class DeclarationBasedElementModelFactory {
 
       @Override
       public void visitSimpleValue(String value) {
-        ComponentConfiguration item = ComponentConfiguration.builder()
-            .withIdentifier(asIdentifier(itemDsl))
-            .withParameter(VALUE_ATTRIBUTE_NAME, value)
-            .build();
+        itemDsl.getContainedElement(VALUE_ATTRIBUTE_NAME)
+            .ifPresent(valueDsl -> {
+              ComponentConfiguration item = ComponentConfiguration.builder()
+                  .withIdentifier(asIdentifier(itemDsl))
+                  .withParameter(VALUE_ATTRIBUTE_NAME, value)
+                  .build();
 
-        parentConfig.withNestedComponent(item);
-        parentElement.containing(DslElementModel.builder()
-            .withModel(itemValueType)
-            .withDsl(itemDsl)
-            .withConfig(item)
-            .build());
+              parentConfig.withNestedComponent(item);
+              parentElement.containing(DslElementModel.builder()
+                  .withModel(itemValueType)
+                  .withDsl(itemDsl)
+                  .withConfig(item)
+                  .containing(DslElementModel.builder()
+                      .withModel(itemValueType)
+                      .withDsl(valueDsl)
+                      .withValue(value)
+                      .build())
+                  .build());
+            });
       }
 
       @Override
@@ -789,6 +808,10 @@ class DeclarationBasedElementModelFactory {
         .withName(fieldDsl.getElementName())
         .withNamespace(fieldDsl.getPrefix())
         .build();
+  }
+
+  private boolean isText(ParameterModel parameter) {
+    return parameter.getLayoutModel().map(LayoutModel::isText).orElse(false);
   }
 
 }
