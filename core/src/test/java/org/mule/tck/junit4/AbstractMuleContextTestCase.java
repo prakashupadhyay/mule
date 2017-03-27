@@ -318,7 +318,7 @@ public abstract class AbstractMuleContextTestCase extends AbstractMuleTestCase
     {
         try
         {
-            if (muleContext != null && !(muleContext.isDisposed() || muleContext.isDisposing()))
+            if (muleContext != null && !(muleContext.isDisposed() || muleContext.isDisposing() || muleContext.isStarted()))
             {
                 muleContext.dispose();
 
