@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.ReadableByteChannel;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -38,12 +39,12 @@ public abstract class AbstractInputStreamBuffer implements InputStreamBuffer {
   private static Logger LOGGER = getLogger(AbstractInputStreamBuffer.class);
 
   private final Lock bufferLock = new ReentrantLock();
+  private final AtomicBoolean closed = new AtomicBoolean(false);
+  private final ByteBufferManager bufferManager;
 
   private InputStream stream;
-  private final ByteBufferManager bufferManager;
   private ReadableByteChannel streamChannel;
   private ByteBuffer buffer;
-  private boolean closed = false;
   private Range bufferRange;
   private boolean streamFullyConsumed = false;
 
@@ -136,19 +137,23 @@ public abstract class AbstractInputStreamBuffer implements InputStreamBuffer {
    */
   @Override
   public final void close() {
-    closed = true;
+    if (closed.compareAndSet(false, true)) {
+      acquireBufferLock();
+      try {
+        doClose();
+      } finally {
+        if (streamChannel != null) {
+          safely(streamChannel::close);
+        }
 
-    doClose();
+        if (stream != null) {
+          safely(stream::close);
+        }
 
-    if (streamChannel != null) {
-      safely(streamChannel::close);
+        deallocate(buffer);
+        releaseBufferLock();
+      }
     }
-
-    if (stream != null) {
-      safely(stream::close);
-    }
-
-    deallocate(buffer);
   }
 
   /**
@@ -174,7 +179,7 @@ public abstract class AbstractInputStreamBuffer implements InputStreamBuffer {
    */
   @Override
   public final int get(ByteBuffer destination, long position, int length) {
-    checkState(!closed, "Buffer is closed");
+    checkState(!closed.get(), "Buffer is closed");
 
     return doGet(destination, position, length, true);
   }

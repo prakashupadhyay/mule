@@ -10,7 +10,6 @@ import org.mule.runtime.api.streaming.objects.CursorIteratorProvider;
 import org.mule.runtime.core.internal.streaming.AbstractCursorIterator;
 
 import java.io.IOException;
-import java.util.function.Consumer;
 
 public class BufferedCursorIterator<T> extends AbstractCursorIterator<T> {
 
@@ -42,10 +41,4 @@ public class BufferedCursorIterator<T> extends AbstractCursorIterator<T> {
     //TODO
   }
 
-  @Override
-  public void forEachRemaining(Consumer<? super T> action) {
-    while (hasNext()) {
-      action.accept(next());
-    }
-  }
 }

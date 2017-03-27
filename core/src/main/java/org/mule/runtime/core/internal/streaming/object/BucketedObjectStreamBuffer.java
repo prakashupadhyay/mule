@@ -6,7 +6,6 @@
  */
 package org.mule.runtime.core.internal.streaming.object;
 
-import static java.lang.Integer.MAX_VALUE;
 import static java.lang.Math.floor;
 import static java.util.Optional.empty;
 import static java.util.Optional.ofNullable;
@@ -18,55 +17,69 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class BucketedObjectStreamBuffer<T> implements ObjectStreamBuffer<T> {
+public class BucketedObjectStreamBuffer<T> extends AbstractObjectStreamBuffer<T> {
 
   private final ConsumerIterator<T> stream;
   private final InMemoryCursorIteratorConfig config;
-  private final ReadWriteLock bucketsReadWriteLock = new ReentrantReadWriteLock();
-  private final Lock bucketsReadLock = bucketsReadWriteLock.readLock();
-  private final Lock bucketsWriteLock = bucketsReadWriteLock.writeLock();
 
   private List<Bucket<T>> buckets;
   private Bucket<T> currentBucket;
   private Position currentPosition;
   private Position maxPosition = null;
 
-  public BucketedObjectStreamBuffer(ConsumerIterator<T> stream,
-                                    InMemoryCursorIteratorConfig config) {
+  public BucketedObjectStreamBuffer(ConsumerIterator<T> stream, InMemoryCursorIteratorConfig config) {
     this.stream = stream;
     this.config = config;
     initialiseBuckets();
   }
 
   @Override
-  public T get(long i) {
+  protected T doGet(long i) {
     Position position = toPosition(i);
-    if (maxPosition.compareTo(position) < 0) {
+    if (maxPosition != null && maxPosition.compareTo(position) < 1) {
       throw new NoSuchElementException();
     }
 
-    bucketsReadLock.lock();
+    readLock.lock();
     try {
       return getPresentItem(position).orElseGet(() -> {
-        safeUnlock(bucketsReadLock);
+        safeUnlock(readLock);
         return fetch(position);
       });
     } finally {
-      safeUnlock(bucketsReadLock);
+      safeUnlock(readLock);
     }
   }
 
   @Override
-  public boolean hasNext(long position) {
-    return false;
+  protected boolean doHasNext(long i) {
+    Position position = toPosition(i);
+
+    readLock.lock();
+    try {
+      if (maxPosition != null) {
+        return maxPosition.compareTo(position) < 1;
+      }
+
+      if (currentPosition.compareTo(position) < 1) {
+        return true;
+      }
+
+      try {
+        safeUnlock(readLock);
+        fetch(position);
+        return true;
+      } catch (NoSuchElementException e) {
+        return false;
+      }
+    } finally {
+      safeUnlock(readLock);
+    }
   }
 
   @Override
-  public void close() {
+  protected void doClose() {
 
   }
 
@@ -76,8 +89,6 @@ public class BucketedObjectStreamBuffer<T> implements ObjectStreamBuffer<T> {
       maxPosition = toPosition(size);
       buckets = new ArrayList<>(maxPosition.bucketIndex + 1);
     } else {
-      // equivalent to a null object
-      maxPosition = new Position(MAX_VALUE, config.getBufferSizeIncrement());
       buckets = new ArrayList<>();
     }
 
@@ -96,7 +107,7 @@ public class BucketedObjectStreamBuffer<T> implements ObjectStreamBuffer<T> {
   }
 
   private T fetch(Position position) {
-    bucketsWriteLock.lock();
+    writeLock.lock();
 
     try {
       return getPresentItem(position).orElseGet(() -> {
@@ -104,6 +115,7 @@ public class BucketedObjectStreamBuffer<T> implements ObjectStreamBuffer<T> {
 
         while (currentPosition.compareTo(position) < 0) {
           if (!stream.hasNext()) {
+            maxPosition = currentPosition;
             throw new NoSuchElementException();
           }
 
@@ -111,8 +123,7 @@ public class BucketedObjectStreamBuffer<T> implements ObjectStreamBuffer<T> {
           if (currentBucket.add(item)) {
             currentPosition = currentPosition.advanceItem();
           } else {
-            currentBucket = new Bucket<>(config.getBufferSizeIncrement());
-            currentBucket.add(item);
+            currentBucket = Bucket.of(item, config.getBufferSizeIncrement());
             buckets.add(currentBucket);
             currentPosition = currentPosition.advanceBucket();
           }
@@ -121,7 +132,7 @@ public class BucketedObjectStreamBuffer<T> implements ObjectStreamBuffer<T> {
         return item;
       });
     } finally {
-      bucketsWriteLock.unlock();
+      writeLock.unlock();
     }
   }
 
@@ -182,7 +193,7 @@ public class BucketedObjectStreamBuffer<T> implements ObjectStreamBuffer<T> {
     return 0;
   }
 
-  private class Bucket<T> {
+  private static class Bucket<T> {
 
     private final List<T> items;
     private final int capacity;
@@ -190,6 +201,13 @@ public class BucketedObjectStreamBuffer<T> implements ObjectStreamBuffer<T> {
     private Bucket(int capacity) {
       this.capacity = capacity;
       this.items = new ArrayList<>(capacity);
+    }
+
+    private static <T> Bucket<T> of(T initialItem, int capacity) {
+      Bucket<T> bucket = new Bucket<>(capacity);
+      bucket.add(initialItem);
+
+      return bucket;
     }
 
     private boolean add(T item) {
